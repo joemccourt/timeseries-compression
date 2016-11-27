@@ -1,0 +1,38 @@
+{
+  "name": "timeseries-compression",
+  "version": "0.0.1",
+  "description": "Timeseries compression.  JS implementation of FB's Gorilla compression",
+  "main": "src/TimeseriesCompression.js",
+  "scripts": {
+    "test": "jasmine-node src/TimeseriesCompression.spec.js",
+    "lint": "./node_modules/.bin/eslint 'src/*.js'",
+    "cover": "node_modules/istanbul/lib/cli.js cover jasmine-node src/TimeseriesCompression.spec.js -x '**/*.spec.js'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joemccourt/timeseries-compression.git"
+  },
+  "author": {
+    "name": "Joe McCourt",
+    "email": "joe.j.mccourt@gmail.com",
+    "url": "http://josephmccourt.com"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/joemccourt/timeseries-compression/issues"
+  },
+  "homepage": "https://github.com/joemccourt/timeseries-compression#readme",
+  "dependencies": {
+    "binary-ring-buffer": "^0.1.5"
+  },
+  "devDependencies": {
+    "jasmine-node": "^1.14.5",
+    "coveralls": "^2.11.15",
+    "eslint": "^3.10.2",
+    "eslint-config-airbnb": "^13.0.0",
+    "eslint-plugin-import": "^2.2.0",
+    "eslint-plugin-jsx-a11y": "^2.2.3",
+    "eslint-plugin-react": "^6.7.1",
+    "istanbul": "^0.4.5"
+  }
+}
