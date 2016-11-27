@@ -1,9 +1,10 @@
-const timeseriesCompression = require('./TimeseriesCompression');
-const binBuffer = require('binary-ring-buffer');
-let compression = new timeseriesCompression();
+/* eslint-env jasmine */
+const TimeseriesCompression = require('./TimeseriesCompression');
+const BinBuffer = require('binary-ring-buffer');
 
-describe('timeseries compression', function () {
-    it('timestamp series of constant interval', function () {
+let compression = new TimeseriesCompression();
+describe('timeseries compression', () => {
+    it('timestamp series of constant interval', () => {
         let t0 = new Date().getTime();
 
         // Single zero bit for constant interval
@@ -11,9 +12,9 @@ describe('timeseries compression', function () {
         expect(encoded).toEqual([0, 1]);
     });
 
-    it('timestamp series can encode and decode', function () {
+    it('timestamp series can encode and decode', () => {
         let t0 = new Date().getTime();
-        let buf = new binBuffer();
+        let buf = new BinBuffer();
 
         let ts = [t0 - 10000, t0 - 5000, t0];
 

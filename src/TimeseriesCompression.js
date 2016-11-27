@@ -1,5 +1,3 @@
-const binBuffer = require('binary-ring-buffer');
-
 const POW_32 = Math.pow(2, 32);
 
 const byteToBitArray = (byte) => {
@@ -18,6 +16,7 @@ const mapToHex = (v) => {
     if (v === 13) { return 'd'; }
     if (v === 14) { return 'e'; }
     if (v === 15) { return 'f'; }
+    return '';
 };
 
 const byteToHexArray = (byte) => {
@@ -30,19 +29,19 @@ const byteToHexArray = (byte) => {
 
 const viewFloat = (v) => {
     let a = new ArrayBuffer(8);
-    var dataview = new DataView(a);
+    let dataview = new DataView(a);
     dataview.setFloat64(0, v);
 
     let view = new Uint8Array(a);
     let values = [view[0], view[1], view[2], view[3], view[4], view[5], view[6], view[7]];
-    // let valuesHex = '0x' + values.map(v => byteToHexArray(v).join('')).join('');
-    // console.log(valuesHex);
-    // let valuesBin = '0x' + values.map(v => byteToBitArray(v).join('')).join(',');
-    // console.log(valuesBin);
+    let valuesHex = `0x${values.map(b => byteToHexArray(b).join('')).join('')}`;
+    console.log(valuesHex);
+    let valuesBin = `0x${values.map(b => byteToBitArray(b).join('')).join(',')}`;
+    console.log(valuesBin);
 };
 
 // First and last nonzero bit lookup in nibble
-//num  bin F, L
+// num bin F, L
 //  0 0000 -, -
 //  1 0001 3, 3
 //  2 0010 2, 2
@@ -60,11 +59,11 @@ const viewFloat = (v) => {
 // 14 1110 0, 2
 // 15 1111 0, 3
 
-const FOUR_BIT_POS_FIRST = [0,3,2,2,1,1,1,1,0,0,0,0,0,0,0,0];
-const FOUR_BIT_POS_LAST  = [0,3,2,3,1,3,2,3,0,3,2,3,1,3,2,3];
+const FOUR_BIT_POS_FIRST = [0, 3, 2, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+const FOUR_BIT_POS_LAST = [0, 3, 2, 3, 1, 3, 2, 3, 0, 3, 2, 3, 1, 3, 2, 3];
 const floatXOR = (v1, v2) => {
     let a = new ArrayBuffer(16);
-    var dataview = new DataView(a);
+    let dataview = new DataView(a);
     dataview.setFloat64(0, v1);
     dataview.setFloat64(8, v2);
 
@@ -114,23 +113,8 @@ floatXOR(-2, 0);
 floatXOR(1.1234907723838, 1.3848234239482);
 
 class TimeseriesCompression {
-    constructor(ts) {
-        // console.log(testData);
-    }
-
-
-    encodeValue(v, prev) {
-        if (prev === undefined) {
-            return v;
-        }
-
-        if (v === prev) {
-            return [0, 1];
-        }
-    }
-
-    // TODO: will break in 2038 ;)
-    encodeTS(ts, prev1 = -1, prev2 = -1) {
+    static encodeTS(ts, prev1 = -1, prev2 = -1) {
+        // TODO: will break in 2038 ;)
         if (prev1 < 0) { return [ts, 32]; }
 
         let dt = ts - prev1;
@@ -156,11 +140,11 @@ class TimeseriesCompression {
             return [14 * (1 << 12) + dd + 2047, 16];
         }
 
-        return [15 * POW_32 + dd + POW_32/2 - 1, 36];
+        return [15 * POW_32 + dd + POW_32 / 2 - 1, 36];
     }
 
-    decodeTS(buf, prev1 = -1, prev2 = -1) {
-        if (prev1 < 0 ) {
+    static decodeTS(buf, prev1 = -1, prev2 = -1) {
+        if (prev1 < 0) {
             return buf.readBits(32);
         }
 
@@ -188,35 +172,35 @@ class TimeseriesCompression {
             return prev1 + dt + dd;
         }
 
-        let dd = buf.readBits(32) - (POW_32/2 - 1);
+        let dd = buf.readBits(32) - (POW_32 / 2 - 1);
         return prev1 + dt + dd;
     }
 
-    encode(ts) {
+    static encode(ts) {
         let encoded = [];
-        ts.forEach(s => {
+        ts.forEach((s) => {
             let e = [];
             if (!s.length) { return; }
-            let tL1 = s[0][0];
-            let vL1 = s[0][1];
-            let tL2 = tL1;
-            e.push(s[0][0]); //header time
+            // let tL1 = s[0][0];
+            // let vL1 = s[0][1];
+            // let tL2 = tL1;
+            e.push(s[0][0]); // header time
             e.push(0); // first point delta time
             e.push(s[0][1]);
             s.forEach((p, i) => {
                 if (i === 0) { return; }
                 let t = p[0];
-                let dt = t - s[i-1][0];
+                let dt = t - s[i - 1][0];
                 let deltaDelta = 0;
                 if (i >= 2) {
-                    deltaDelta = dt - (s[i-1][0] - s[i-2][0]);
+                    deltaDelta = dt - (s[i - 1][0] - s[i - 2][0]);
                 } else {
                     deltaDelta = dt;
                 }
                 if (deltaDelta === 0) {
                     e.push(0);
                 } else {
-                    e.push(dt + ":" + deltaDelta);
+                    e.push(`${dt}:${deltaDelta}`);
                 }
 
                 let v = p[1];
@@ -229,7 +213,8 @@ class TimeseriesCompression {
         return ts;
     }
 
-    decode(ts) {
+    static decode(ts) {
+        // implement me!
         return ts;
     }
 }
