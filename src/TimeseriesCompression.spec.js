@@ -2,7 +2,7 @@
 const TimeseriesCompression = require('./TimeseriesCompression');
 const BinBuffer = require('binary-ring-buffer');
 
-let compression = new TimeseriesCompression();
+// let compression = new TimeseriesCompression();
 describe('timeseries compression', () => {
     it('timestamp series of constant interval', () => {
         let t0 = new Date().getTime();
