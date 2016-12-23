@@ -1,44 +1,6 @@
+const BinBuffer = require('binary-ring-buffer');
+
 const POW_32 = Math.pow(2, 32);
-
-const byteToBitArray = (byte) => {
-    let a = [];
-    for (let i = 0; i < 8; i++) {
-        a[8 - i - 1] = (byte & (1 << i)) > 0 ? 1 : 0;
-    }
-    return a;
-};
-
-const mapToHex = (v) => {
-    if (v < 10) { return v; }
-    if (v === 10) { return 'a'; }
-    if (v === 11) { return 'b'; }
-    if (v === 12) { return 'c'; }
-    if (v === 13) { return 'd'; }
-    if (v === 14) { return 'e'; }
-    if (v === 15) { return 'f'; }
-    return '';
-};
-
-const byteToHexArray = (byte) => {
-    let a = [];
-
-    a[0] = mapToHex(byte >> 4);
-    a[1] = mapToHex(((byte << 4) & 255) >> 4);
-    return a;
-};
-
-const viewFloat = (v) => {
-    let a = new ArrayBuffer(8);
-    let dataview = new DataView(a);
-    dataview.setFloat64(0, v);
-
-    let view = new Uint8Array(a);
-    let values = [view[0], view[1], view[2], view[3], view[4], view[5], view[6], view[7]];
-    let valuesHex = `0x${values.map(b => byteToHexArray(b).join('')).join('')}`;
-    console.log(valuesHex);
-    let valuesBin = `0x${values.map(b => byteToBitArray(b).join('')).join(',')}`;
-    console.log(valuesBin);
-};
 
 // First and last nonzero bit lookup in nibble
 // num bin F, L
@@ -58,61 +20,134 @@ const viewFloat = (v) => {
 // 13 1101 0, 3
 // 14 1110 0, 2
 // 15 1111 0, 3
-
 const FOUR_BIT_POS_FIRST = [0, 3, 2, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
 const FOUR_BIT_POS_LAST = [0, 3, 2, 3, 1, 3, 2, 3, 0, 3, 2, 3, 1, 3, 2, 3];
-const floatXOR = (v1, v2) => {
-    let a = new ArrayBuffer(16);
-    let dataview = new DataView(a);
-    dataview.setFloat64(0, v1);
-    dataview.setFloat64(8, v2);
-
-    let leading = -1;
-    let lastNonZero = -1;
-    for (let i = 0; i < 8; i++) {
-        let x = dataview.getUint8(i) ^ dataview.getUint8(8 + i);
-        dataview.setUint8(i, x);
-
-        // Calc num leading zeros
-        // if nonzero and leading is not set yet
-        if (x && leading === -1) {
-            if (x & 0xF0) {
-                // if first nibble nonzero shift and lookup
-                leading = i * 8 + FOUR_BIT_POS_FIRST[x >> 4];
-            } else {
-                // else second nibble is nonzero and it's 4 plus the lookup
-                leading = i * 8 + 4 + FOUR_BIT_POS_FIRST[x];
-            }
-        }
-
-        // if nonzero and leading has been set
-        if (x && leading !== -1) {
-            if (x & 0x0F) {
-                // if second nibble nonzero it's 4 + lookup on on second nibble
-                lastNonZero = i * 8 + 4 + FOUR_BIT_POS_LAST[x & 0x0F];
-            } else {
-                // else first nibble nonzero so lookup on first
-                lastNonZero = i * 8 + FOUR_BIT_POS_LAST[x >> 4];
-            }
-        }
-    }
-
-    let trailing = 64 - (lastNonZero + 1);
-    let middle = 64 - leading - trailing;
-    viewFloat(dataview.getFloat64(0));
-    console.log(leading, middle, trailing);
-};
-
-floatXOR(24, 2);
-floatXOR(1.5, 0);
-floatXOR(2.5, 0);
-floatXOR(2.25, 0);
-floatXOR(250, 0);
-floatXOR(2, 0);
-floatXOR(-2, 0);
-floatXOR(1.1234907723838, 1.3848234239482);
 
 class TimeseriesCompression {
+    static floatXOR(v1, v2) {
+        let a = new ArrayBuffer(16);
+        let dataview = new DataView(a);
+        let buf = new BinBuffer();
+
+        dataview.setFloat64(0, v1);
+        dataview.setFloat64(8, v2);
+
+        let leading = -1;
+        let lastNonZero = -1;
+        for (let i = 0; i < 8; i++) {
+            let x = dataview.getUint8(i) ^ dataview.getUint8(8 + i);
+            dataview.setUint8(i, x);
+            buf.writeBits(x, 8);
+
+            // Calc num leading zeros
+            // if nonzero and leading is not set yet
+            if (x && leading === -1) {
+                if (x & 0xF0) {
+                    // if first nibble nonzero shift and lookup
+                    leading = i * 8 + FOUR_BIT_POS_FIRST[x >> 4];
+                } else {
+                    // else second nibble is nonzero and it's 4 plus the lookup
+                    leading = i * 8 + 4 + FOUR_BIT_POS_FIRST[x];
+                }
+            }
+
+            // if nonzero and leading has been set
+            if (x && leading !== -1) {
+                if (x & 0x0F) {
+                    // if second nibble nonzero it's 4 + lookup on on second nibble
+                    lastNonZero = i * 8 + 4 + FOUR_BIT_POS_LAST[x & 0x0F];
+                } else {
+                    // else first nibble nonzero so lookup on first
+                    lastNonZero = i * 8 + FOUR_BIT_POS_LAST[x >> 4];
+                }
+            }
+        }
+
+        let trailing = 64 - (lastNonZero + 1);
+        let middle = 64 - leading - trailing;
+        let meaningful = 0;
+        if (leading === -1) {
+            leading = 64;
+            middle = 0;
+            trailing = 64;
+        } else {
+            buf.readBits(leading);
+            meaningful = buf.readBits(middle);
+        }
+
+        return {
+            leading,
+            trailing,
+            middle,
+            meaningful,
+            xor: dataview.getFloat64(0),
+        };
+    }
+
+    static encodeValue(buf, value, prevValue, prevLeading, prevTrailing) {
+        // first value has no compression
+        if (prevValue === undefined) {
+            buf.writeBits(value, 64);
+            return {
+                leading: 0,
+                meaningful: 64,
+            };
+        }
+
+        // if same value write a single 0 bit
+        if (value === prevValue) {
+            buf.writeBits(0, 1);
+            return {
+                leading: prevLeading,
+                trailing: prevTrailing,
+            };
+        }
+
+        // control bit 1
+        buf.writeBits(1, 1);
+
+        let xor = TimeseriesCompression.floatXOR(prevValue, value);
+
+        // if within previous block, write only the meaningful bits
+        let withinMeaningful = xor.leading >= prevLeading && xor.trailing >= prevTrailing;
+        if (withinMeaningful) {
+            // control bit 0
+            buf.writeBits(0, 1);
+
+            // write xor value
+            buf.writeBits(xor.meaningful, 64 - prevLeading - prevTrailing);
+
+            return {
+                leading: prevLeading,
+                trailing: prevTrailing,
+            };
+        }
+
+        // control bit 1
+        buf.writeBits(1, 1);
+
+        // length of leading
+        buf.writeBits(xor.leading, 5);
+
+        // length of meaningful
+        buf.writeBits(xor.middle, 6);
+
+        // write xor value
+        buf.writeBits(xor.meaningful, xor.middle);
+
+        return {
+            leading: xor.leading,
+            trailing: xor.trailing,
+        };
+    }
+
+    // static decodeValue(buf, prevValue) {
+    //     // first value has no compression
+    //     if (prevValue === undefined) {
+    //         return buf.readBits(64);
+    //     }
+    // }
+
     static encodeTS(ts, prev1 = -1, prev2 = -1) {
         // TODO: will break in 2038 ;)
         if (prev1 < 0) { return [ts, 32]; }
@@ -209,7 +244,7 @@ class TimeseriesCompression {
             encoded.push(e);
         });
 
-        console.log(encoded);
+        // console.log(encoded);
         return ts;
     }
 
